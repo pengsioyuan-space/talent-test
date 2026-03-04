@@ -3,15 +3,15 @@ import { getRid } from "../utils/storage";
 
 export function Topbar({ right }: { right?: any }) {
   const nav = useNavigate();
-  const rid = getRid();
 
   const goMyReport = () => {
-    const r = getRid();
-    if (!r) {
-      alert("你还没有生成报告：请完成测评并提交后再查看。");
-      return;
+    const rid = getRid();
+
+    if (rid) {
+      nav(`/report/${rid}`);
+    } else {
+      nav(`/`); // 没有报告就回首页
     }
-    nav(`/report/${r}`);
   };
 
   const defaultRight = (
@@ -27,17 +27,22 @@ export function Topbar({ right }: { right?: any }) {
     <div className="sticky top-0 z-50">
       <div className="bg-white/70 backdrop-blur border-b border-slate-200">
         <div className="mx-auto max-w-6xl px-4 h-14 flex items-center justify-between">
+          
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-2xl bg-violet-600 grid place-items-center text-white font-semibold">
               ★
             </div>
+
             <div className="leading-tight">
               <div className="font-semibold text-slate-900">天赋测试</div>
               <div className="text-xs text-slate-500">Talent Assessment</div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">{right ?? defaultRight}</div>
+          <div className="flex items-center gap-2">
+            {right ?? defaultRight}
+          </div>
+
         </div>
       </div>
     </div>
