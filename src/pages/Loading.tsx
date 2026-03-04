@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../components/Card";
+import { getAnswers, getToken, setRid } from "../utils/storage";
 
 const steps = [
   "正在读取您的答题数据...",
@@ -10,44 +11,70 @@ const steps = [
   "整理测评报告...",
 ];
 
+function jsonFetch(url: string, init?: RequestInit) {
+  return fetch(url, init).then(async (r) => {
+    const j = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, data: j };
+  });
+}
+
 export function Loading() {
   const nav = useNavigate();
-  const [sp] = useSearchParams();
-  const rid = (sp.get("rid") || "").trim();
+  const loc = useLocation();
+  const [sp, setSp] = useSearchParams();
+
+  const rid = sp.get("rid") || "";
   const [done, setDone] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
 
   const pct = useMemo(() => Math.round((done / steps.length) * 100), [done]);
 
-  // ✅ 防呆：手动打开 /loading 时没有 rid，就直接回首页/测试页
+  // 1) 如果是从最后一题过来的（state.submit），就在这里提交并拿 rid
   useEffect(() => {
-    if (!rid) {
-      nav("/test", { replace: true }); // 你想回首页就改成 "/"
-    }
-  }, [rid, nav]);
+    const needSubmit = (loc.state as any)?.submit === true;
+    if (!needSubmit) return;
+    if (submitting) return;
+    if (rid) return; // 已经有 rid 就不用再提交
 
+    (async () => {
+      setSubmitting(true);
+      const token = getToken();
+      const list = getAnswers();
+
+      const { data } = await jsonFetch("/api/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, answers: { list } }),
+      });
+
+      if (data?.ok && data?.rid) {
+        setRid(data.rid);
+        // 把 url 变成 /loading?rid=xxx（你说你想要这样）
+        setSp({ rid: data.rid }, { replace: true });
+        // 清掉 state，避免刷新重复提交
+        nav(`/loading?rid=${encodeURIComponent(data.rid)}`, { replace: true, state: null });
+      } else {
+        alert(`提交失败：${data?.reason || "unknown"}`);
+      }
+
+      setSubmitting(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 2) 进度条 + 有 rid 才跳报告
   useEffect(() => {
-    if (!rid) return;
-
     const t = setInterval(() => {
       setDone((d) => {
         const nd = Math.min(steps.length, d + 1);
+        if (nd === steps.length && rid) {
+          setTimeout(() => nav(`/report/${rid}`, { replace: true }), 800);
+        }
         return nd;
       });
     }, 650);
-
     return () => clearInterval(t);
-  }, [rid]);
-
-  // ✅ 单独监听 done 到达后跳转，更稳（避免 setState 闭包时序问题）
-  useEffect(() => {
-    if (!rid) return;
-    if (done === steps.length) {
-      const to = setTimeout(() => {
-        nav(`/report/${rid}`, { replace: true });
-      }, 800);
-      return () => clearTimeout(to);
-    }
-  }, [done, rid, nav]);
+  }, [nav, rid]);
 
   return (
     <div className="min-h-screen grid place-items-center px-4">
@@ -90,7 +117,7 @@ export function Loading() {
         </Card>
 
         <div className="mt-5 text-center text-xs text-slate-500">
-          提交成功后正在生成报告，请稍候…
+          {submitting ? "正在提交答案并生成报告，请稍候…" : "提交成功后正在生成报告，请稍候…"}
         </div>
       </div>
     </div>

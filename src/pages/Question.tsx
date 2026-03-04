@@ -67,7 +67,7 @@ export function Question() {
     if (idx < total - 1) {
       nav(`/q/${idx + 1}`);
     } else {
-      await submitNow();
+      nav(`/loading`, { state: { submit: true } });
     }
   };
 
@@ -131,7 +131,7 @@ export function Question() {
             ) : (
               <button
                 disabled={submitting}
-                onClick={submitNow}
+                onClick={() => nav(`/loading`, { state: { submit: true } })}
                 className="px-6 py-3 rounded-2xl bg-violet-600 text-white shadow-[0_12px_40px_rgba(139,92,246,0.25)] disabled:opacity-60"
               >
                 {submitting ? "提交中..." : "提交测评 ✓"}
