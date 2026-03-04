@@ -13,23 +13,41 @@ const steps = [
 export function Loading() {
   const nav = useNavigate();
   const [sp] = useSearchParams();
-  const rid = sp.get("rid") || "";
+  const rid = (sp.get("rid") || "").trim();
   const [done, setDone] = useState(0);
 
   const pct = useMemo(() => Math.round((done / steps.length) * 100), [done]);
 
+  // ✅ 防呆：手动打开 /loading 时没有 rid，就直接回首页/测试页
   useEffect(() => {
+    if (!rid) {
+      nav("/test", { replace: true }); // 你想回首页就改成 "/"
+    }
+  }, [rid, nav]);
+
+  useEffect(() => {
+    if (!rid) return;
+
     const t = setInterval(() => {
       setDone((d) => {
         const nd = Math.min(steps.length, d + 1);
-        if (nd === steps.length && rid) {
-          setTimeout(() => nav(`/report/${rid}`, { replace: true }), 800);
-        }
         return nd;
       });
     }, 650);
+
     return () => clearInterval(t);
-  }, [nav, rid]);
+  }, [rid]);
+
+  // ✅ 单独监听 done 到达后跳转，更稳（避免 setState 闭包时序问题）
+  useEffect(() => {
+    if (!rid) return;
+    if (done === steps.length) {
+      const to = setTimeout(() => {
+        nav(`/report/${rid}`, { replace: true });
+      }, 800);
+      return () => clearTimeout(to);
+    }
+  }, [done, rid, nav]);
 
   return (
     <div className="min-h-screen grid place-items-center px-4">
@@ -49,10 +67,12 @@ export function Loading() {
               const ok = i < done;
               return (
                 <div key={i} className="flex items-center gap-3">
-                  <div className={[
-                    "h-6 w-6 rounded-full grid place-items-center text-xs",
-                    ok ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
-                  ].join(" ")}>
+                  <div
+                    className={[
+                      "h-6 w-6 rounded-full grid place-items-center text-xs",
+                      ok ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400",
+                    ].join(" ")}
+                  >
                     {ok ? "✓" : "·"}
                   </div>
                   <div className={ok ? "text-slate-700" : "text-slate-400"}>{s}</div>
@@ -64,7 +84,9 @@ export function Loading() {
           <div className="mt-6 h-3 rounded-full bg-slate-200 overflow-hidden">
             <div className="h-full bg-violet-600" style={{ width: `${pct}%` }} />
           </div>
-          <div className="mt-2 text-center text-sm text-slate-600">分析进度：{done}/{steps.length}</div>
+          <div className="mt-2 text-center text-sm text-slate-600">
+            分析进度：{done}/{steps.length}
+          </div>
         </Card>
 
         <div className="mt-5 text-center text-xs text-slate-500">

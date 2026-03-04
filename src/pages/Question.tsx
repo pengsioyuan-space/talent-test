@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Topbar } from "../components/Topbar";
 import { Card } from "../components/Card";
@@ -27,26 +27,47 @@ export function Question() {
 
   const progress = useMemo(() => Math.round(((idx + 1) / total) * 100), [idx, total]);
 
-  const onPick = (v: number) => {
-    upsertAnswer({ id: q.id, dim: q.dim, value: v });
-    if (idx < total - 1) nav(`/q/${idx + 1}`);
-    else nav(`/loading`, { state: { submit: true } }); // 最后一题走 loading 提交
-  };
+  // ✅ 防止最后一题点击太快重复提交
+  const [submitting, setSubmitting] = useState(false);
 
   const submitNow = async () => {
-    const token = getToken();
-    const list = getAnswers();
-    const r = await fetch(`/api/submit`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, answers: { list } }),
-    });
-    const j = await r.json();
-    if (j.ok && j.rid) {
-      setRid(j.rid);
-      nav(`/loading?rid=${encodeURIComponent(j.rid)}`, { replace: true });
+    if (submitting) return;
+    setSubmitting(true);
+
+    try {
+      const token = getToken();
+      const list = getAnswers();
+
+      const r = await fetch(`/api/submit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, answers: { list } }),
+      });
+
+      const j = await r.json();
+
+      // ✅ 关键：submit 必须返回 rid（如果你后端还没返回 rid，会走到 alert）
+      if (j.ok && j.rid) {
+        setRid(j.rid);
+        nav(`/loading?rid=${encodeURIComponent(j.rid)}`, { replace: true });
+      } else {
+        alert(`提交失败：${j.reason || "unknown"}（是否后端没返回 rid？）`);
+        setSubmitting(false);
+      }
+    } catch (e: any) {
+      alert(`提交异常：${String(e?.message || e)}`);
+      setSubmitting(false);
+    }
+  };
+
+  // ✅ 最小改动：最后一题选完 -> 直接 submitNow()（从而进入 /loading?rid=xxx）
+  const onPick = async (v: number) => {
+    upsertAnswer({ id: q.id, dim: q.dim, value: v });
+
+    if (idx < total - 1) {
+      nav(`/q/${idx + 1}`);
     } else {
-      alert(`提交失败：${j.reason || "unknown"}`);
+      await submitNow();
     }
   };
 
@@ -99,6 +120,7 @@ export function Question() {
               ← 上一题
             </button>
 
+            {/* ✅ 保留你原本按钮逻辑，但最后一题按钮点了也能提交 */}
             {idx < total - 1 ? (
               <button
                 onClick={() => nav(`/q/${idx + 1}`)}
@@ -108,10 +130,11 @@ export function Question() {
               </button>
             ) : (
               <button
+                disabled={submitting}
                 onClick={submitNow}
-                className="px-6 py-3 rounded-2xl bg-violet-600 text-white shadow-[0_12px_40px_rgba(139,92,246,0.25)]"
+                className="px-6 py-3 rounded-2xl bg-violet-600 text-white shadow-[0_12px_40px_rgba(139,92,246,0.25)] disabled:opacity-60"
               >
-                提交测评 ✓
+                {submitting ? "提交中..." : "提交测评 ✓"}
               </button>
             )}
           </div>
