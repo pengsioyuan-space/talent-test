@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DIMENSIONS, QUESTIONS } from "./data/questions";
 import { calcScores, type AnswerMap } from "./utils/score";
 
