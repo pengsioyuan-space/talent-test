@@ -176,7 +176,7 @@ export function Report() {
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {top3.map((t, i) => (
                 <span
-                  key={t}
+                  key={`${t}-${i}`} // ✅ 用到 i，避免 TS6133；也避免 top3 重复项导致 key 冲突
                   className={[
                     "px-3 py-1 rounded-full text-xs font-medium",
                     "bg-white/15 border border-white/20",
@@ -319,7 +319,10 @@ export function Report() {
           <div className="mt-4 grid md:grid-cols-2 gap-3">
             {(narrative?.suggestions || []).length ? (
               narrative.suggestions.map((s, i) => (
-                <div key={i} className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div
+                  key={i}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-200"
+                >
                   <div className="flex gap-2 text-slate-700">
                     <span>✅</span>
                     <span>{s}</span>
