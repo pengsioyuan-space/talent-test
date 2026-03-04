@@ -1,31 +1,50 @@
-export async function onRequest(context) {
-  const { request, env } = context;
+export async function onRequestPost(context) {
+  try {
+    const { TOKENS } = context.env;
+    if (!TOKENS) return json({ ok: false, reason: "missing_kv_binding_TOKENS" }, 500);
 
-  const body = await request.json();
-  const token = body.token;
+    const body = await context.request.json().catch(() => null);
+    if (!body) return json({ ok: false, reason: "invalid_json" }, 400);
 
-  if (!token) {
-    return new Response(JSON.stringify({ ok: false }), { status: 400 });
+    const token = (body.token || "").trim();
+    const answers = body.answers || null;
+    const result = body.result || null;
+
+    if (!token) return json({ ok: false, reason: "missing_token" }, 400);
+
+    // 先查 token
+    const raw = await TOKENS.get(`t:${token}`);
+    if (!raw) return json({ ok: false, reason: "invalid_token" }, 404);
+
+    const data = JSON.parse(raw);
+    if (data.status === "used") {
+      return json({ ok: false, reason: "used", usedAt: data.usedAt || null }, 403);
+    }
+
+    // ✅ 提交时才消耗
+    const now = Date.now();
+    await TOKENS.put(
+      `t:${token}`,
+      JSON.stringify({ ...data, status: "used", usedAt: now }),
+      { expirationTtl: 60 * 60 * 24 * 30 }
+    );
+
+    // 可选：保存结果
+    await TOKENS.put(
+      `r:${token}`,
+      JSON.stringify({ token, submittedAt: now, answers, result }),
+      { expirationTtl: 60 * 60 * 24 * 30 }
+    );
+
+    return json({ ok: true });
+  } catch (err) {
+    return json({ ok: false, reason: "exception", message: String(err?.message || err) }, 500);
   }
+}
 
-  const data = await env.TOKENS.get(token);
-
-  if (!data) {
-    return new Response(JSON.stringify({ ok: false, reason: "invalid_token" }), { status: 403 });
-  }
-
-  const parsed = JSON.parse(data);
-
-  if (parsed.used) {
-    return new Response(JSON.stringify({ ok: false, reason: "already_used" }), { status: 403 });
-  }
-
-  parsed.used = true;
-  parsed.usedAt = Date.now();
-
-  await env.TOKENS.put(token, JSON.stringify(parsed));
-
-  return new Response(JSON.stringify({ ok: true }), {
-    headers: { "Content-Type": "application/json" }
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 }
