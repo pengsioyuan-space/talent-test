@@ -1,3 +1,5 @@
+// functions/api/report.js
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -12,16 +14,17 @@ function json(data, status = 200) {
 export async function onRequestGet(ctx) {
   try {
     const { env, request } = ctx;
-    if (!env?.RESULTS) return json({ ok: false, reason: "missing_kv_binding_RESULTS" }, 500);
+
+    // ✅ 后台只绑定了 TOKENS，所以这里必须是 TOKENS
+    if (!env?.TOKENS) return json({ ok: false, reason: "missing_kv_binding_TOKENS" }, 500);
 
     const url = new URL(request.url);
     const rid = (url.searchParams.get("rid") || "").trim();
     if (!rid) return json({ ok: false, reason: "missing_rid" }, 400);
 
-    const raw = await env.RESULTS.get(`r:${rid}`);
+    const raw = await env.TOKENS.get(`r:${rid}`);
     if (!raw) return json({ ok: false, reason: "not_found" }, 404);
 
-    // 你前端 Report.tsx 期望 j.ok=true 且字段结构里有 report
     const data = JSON.parse(raw);
     return json({ ok: true, ...data });
   } catch (e) {
