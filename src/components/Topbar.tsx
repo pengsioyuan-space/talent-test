@@ -5,16 +5,19 @@ export function Topbar({ right }: { right?: any }) {
   const nav = useNavigate();
   const rid = getRid();
 
+  const goMyReport = () => {
+    const r = getRid();
+    if (!r) {
+      alert("你还没有生成报告：请完成测评并提交后再查看。");
+      return;
+    }
+    nav(`/report/${r}`);
+  };
+
   const defaultRight = (
     <button
-      disabled={!rid}
-      onClick={() => rid && nav(`/report/${rid}`)}
-      className={[
-        "px-4 py-2 rounded-2xl border border-slate-200 bg-white/80 backdrop-blur",
-        "text-sm md:text-base",
-        "disabled:opacity-40 disabled:cursor-not-allowed",
-      ].join(" ")}
-      title={!rid ? "你还没有生成报告" : "查看我的报告"}
+      onClick={goMyReport}
+      className="px-4 py-2 rounded-2xl border border-slate-200 bg-white/80 backdrop-blur text-sm md:text-base"
     >
       我的报告
     </button>

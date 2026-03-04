@@ -20,7 +20,7 @@ export function upsertAnswer(item: AnswerItem) {
 }
 export function clearAll() {
   localStorage.removeItem(K_ANS);
-  localStorage.removeItem(K_RID);
+//   localStorage.removeItem(K_RID);
 }
 export function setRid(rid: string) { localStorage.setItem(K_RID, rid); }
 export function getRid() { return localStorage.getItem(K_RID) || ""; }
