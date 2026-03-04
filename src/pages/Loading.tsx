@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "../components/Card";
-import { getAnswers, getToken, setRid } from "../utils/storage";
+import { getAnswers, getRid, getToken, setRid } from "../utils/storage";
+import { QUESTIONS } from "../data/questions";
 
 const steps = [
   "正在读取您的答题数据...",
@@ -18,51 +19,85 @@ function jsonFetch(url: string, init?: RequestInit) {
   });
 }
 
+function firstMissingIndex(): number {
+  const answers = getAnswers();
+  for (let idx = 0; idx < QUESTIONS.length; idx++) {
+    const q = QUESTIONS[idx];
+    const hit = answers.find((x) => x.id === q.id)?.value;
+    if (!hit) return idx;
+  }
+  return -1;
+}
+
 export function Loading() {
   const nav = useNavigate();
   const loc = useLocation();
   const [sp, setSp] = useSearchParams();
 
-  const rid = sp.get("rid") || "";
+  const ridInUrl = sp.get("rid") || "";
+  const ridInStorage = getRid();
+  const rid = ridInUrl || ridInStorage;
+
   const [done, setDone] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   const pct = useMemo(() => Math.round((done / steps.length) * 100), [done]);
 
-  // 1) 如果是从最后一题过来的（state.submit），就在这里提交并拿 rid
   useEffect(() => {
     const needSubmit = (loc.state as any)?.submit === true;
+
+    // ✅ 没有 submit 意图就只显示动画（或等待 rid）
     if (!needSubmit) return;
+
+    // ✅ 已经有 rid（提交过），不再 submit
+    if (rid) return;
+
+    // ✅ 关键：loading 提交前也强制校验答满
+    const miss = firstMissingIndex();
+    if (miss !== -1) {
+      alert(`你还有第 ${miss + 1} 题未作答，请先完成再提交。`);
+      nav(`/q/${miss}`, { replace: true });
+      return;
+    }
+
     if (submitting) return;
-    if (rid) return; // 已经有 rid 就不用再提交
 
     (async () => {
       setSubmitting(true);
-      const token = getToken();
-      const list = getAnswers();
 
-      const { data } = await jsonFetch("/api/submit", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, answers: { list } }),
-      });
+      try {
+        const token = getToken();
+        const list = getAnswers();
 
-      if (data?.ok && data?.rid) {
-        setRid(data.rid);
-        // 把 url 变成 /loading?rid=xxx（你说你想要这样）
-        setSp({ rid: data.rid }, { replace: true });
-        // 清掉 state，避免刷新重复提交
-        nav(`/loading?rid=${encodeURIComponent(data.rid)}`, { replace: true, state: null });
-      } else {
-        alert(`提交失败：${data?.reason || "unknown"}`);
+        if (!token) {
+          alert("提交失败：missing_token");
+          setSubmitting(false);
+          nav(`/`, { replace: true });
+          return;
+        }
+
+        const { data } = await jsonFetch("/api/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token, answers: { list } }),
+        });
+
+        if (data?.ok && data?.rid) {
+          setRid(data.rid);
+          setSp({ rid: data.rid }, { replace: true });
+          nav(`/loading?rid=${encodeURIComponent(data.rid)}`, { replace: true, state: null });
+        } else {
+          alert(`提交失败：${data?.reason || "unknown"}`);
+        }
+      } catch (e: any) {
+        alert(`提交异常：${String(e?.message || e)}`);
+      } finally {
+        setSubmitting(false);
       }
-
-      setSubmitting(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 2) 进度条 + 有 rid 才跳报告
   useEffect(() => {
     const t = setInterval(() => {
       setDone((d) => {
